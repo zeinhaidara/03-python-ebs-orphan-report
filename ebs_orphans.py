@@ -1,10 +1,10 @@
 """List unattached EBS volumes across an AWS Organization and write them to a CSV."""
 import argparse
 import csv
+import logging
 from datetime import UTC, datetime, timedelta
 
 import boto3
-from botocore.exceptions import BotoCoreError, ClientError
 
 # Check current AWS pricing for your region. 0.08 is a rough gp3 figure.
 DEFAULT_PRICE = 0.08
@@ -83,13 +83,15 @@ def main():
 
     now = datetime.now(UTC)
     rows = []
+    skipped = []
     for account_id in active_accounts():
         try:
             rows += scan_account(
                 account_id, args.role_name, args.min_age_days, args.price_per_gb_month, now
             )
-        except (ClientError, BotoCoreError) as err:
-            print(f"warning: skipping {account_id}: {err}")
+        except Exception as err:  # one bad account must not stop the run
+            logging.warning("skipping %s: %s", account_id, err)
+            skipped.append(account_id)
 
     with open(args.out, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=FIELDS)
@@ -99,6 +101,8 @@ def main():
     total_gb = sum(r["size_gb"] for r in rows)
     total_cost = monthly_cost(total_gb, args.price_per_gb_month)
     print(f"{len(rows)} orphan volumes, {total_gb} GB, ~${total_cost:.2f}/month -> {args.out}")
+    if skipped:
+        print(f"skipped {len(skipped)} accounts: {', '.join(skipped)}")
 
 
 if __name__ == "__main__":
