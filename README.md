@@ -1,5 +1,7 @@
 # ebs-orphan-report
 
+Status: Tested with moto only. Not yet run against a live AWS organization.
+
 Unattached EBS volumes keep costing money after the instance they belonged to is gone.
 In an AWS Organization with many accounts and regions, nobody sees them all in one place.
 This tool scans every account and region and writes the old ones to a CSV for a person to review.
