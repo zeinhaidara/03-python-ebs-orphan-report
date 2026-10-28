@@ -3,7 +3,8 @@ from datetime import timedelta
 import boto3
 from moto import mock_aws
 
-from ebs_orphans import monthly_cost, scan_region
+import ebs_orphans
+from ebs_orphans import monthly_cost, scan_all, scan_region
 
 REGION = "us-east-1"
 
@@ -50,3 +51,29 @@ def test_in_use_excluded():
 
 def test_cost_math():
     assert f"{monthly_cost(100, 0.08):.2f}" == "8.00"
+
+
+@mock_aws
+def test_failed_account_is_skipped(monkeypatch):
+    good, bad = "222222222222", "111111111111"
+    creds = boto3.client("sts", region_name=REGION).assume_role(
+        RoleArn=f"arn:aws:iam::{good}:role/R", RoleSessionName="test"
+    )["Credentials"]
+    ec2 = boto3.client(
+        "ec2", region_name=REGION, aws_access_key_id=creds["AccessKeyId"],
+        aws_secret_access_key=creds["SecretAccessKey"], aws_session_token=creds["SessionToken"],
+    )
+    vol = make_volume(ec2)
+
+    real = ebs_orphans.scan_account
+
+    def fake(account_id, *args):
+        if account_id == bad:
+            raise RuntimeError("role not found")
+        return real(account_id, *args)
+
+    monkeypatch.setattr(ebs_orphans, "scan_account", fake)
+    now = vol["CreateTime"] + timedelta(days=60)
+    rows, skipped = scan_all([bad, good], "R", 30, 0.08, now)
+    assert [r["volume_id"] for r in rows] == [vol["VolumeId"]]
+    assert skipped == [(bad, "role not found")]

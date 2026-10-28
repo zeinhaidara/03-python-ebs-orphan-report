@@ -75,6 +75,18 @@ def active_accounts():
     return [a["Id"] for p in pages for a in p["Accounts"] if a["Status"] == "ACTIVE"]
 
 
+def scan_all(account_ids, role_name, min_age_days, price, now):
+    """Scan every account. Returns (rows, skipped) where skipped is [(account, reason)]."""
+    rows, skipped = [], []
+    for account_id in account_ids:
+        try:
+            rows += scan_account(account_id, role_name, min_age_days, price, now)
+        except Exception as err:  # noqa: BLE001  one bad account must not stop the run
+            log.warning("skipping %s: %s", account_id, err)
+            skipped.append((account_id, str(err)))
+    return rows, skipped
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--min-age-days", type=int, default=30)
@@ -85,16 +97,9 @@ def main():
     logging.basicConfig(format="%(levelname)s: %(message)s")
 
     now = datetime.now(UTC)
-    rows = []
-    skipped = []
-    for account_id in active_accounts():
-        try:
-            rows += scan_account(
-                account_id, args.role_name, args.min_age_days, args.price_per_gb_month, now
-            )
-        except Exception as err:  # noqa: BLE001  one bad account must not stop the run
-            log.warning("skipping %s: %s", account_id, err)
-            skipped.append(account_id)
+    rows, skipped = scan_all(
+        active_accounts(), args.role_name, args.min_age_days, args.price_per_gb_month, now
+    )
 
     with open(args.out, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=FIELDS)
@@ -105,7 +110,7 @@ def main():
     total_cost = monthly_cost(total_gb, args.price_per_gb_month)
     print(f"{len(rows)} orphan volumes, {total_gb} GB, ~${total_cost:.2f}/month -> {args.out}")
     if skipped:
-        print(f"skipped {len(skipped)} accounts: {', '.join(skipped)}")
+        print(f"skipped {len(skipped)} accounts: {', '.join(a for a, _ in skipped)}")
 
 
 if __name__ == "__main__":
