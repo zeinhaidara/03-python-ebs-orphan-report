@@ -6,6 +6,8 @@ from datetime import UTC, datetime, timedelta
 
 import boto3
 
+log = logging.getLogger(__name__)
+
 # Check current AWS pricing for your region. 0.08 is a rough gp3 figure.
 DEFAULT_PRICE = 0.08
 
@@ -80,6 +82,7 @@ def main():
     ap.add_argument("--price-per-gb-month", type=float, default=DEFAULT_PRICE)
     ap.add_argument("--out", default="orphans.csv")
     args = ap.parse_args()
+    logging.basicConfig(format="%(levelname)s: %(message)s")
 
     now = datetime.now(UTC)
     rows = []
@@ -89,8 +92,8 @@ def main():
             rows += scan_account(
                 account_id, args.role_name, args.min_age_days, args.price_per_gb_month, now
             )
-        except Exception as err:  # one bad account must not stop the run
-            logging.warning("skipping %s: %s", account_id, err)
+        except Exception as err:  # noqa: BLE001  one bad account must not stop the run
+            log.warning("skipping %s: %s", account_id, err)
             skipped.append(account_id)
 
     with open(args.out, "w", newline="") as f:
