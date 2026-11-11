@@ -1,4 +1,4 @@
-# ebs-orphan-report
+# Orphaned EBS volume report
 
 Status: Tested with moto only. Not yet run against a live AWS organization.
 
@@ -55,14 +55,14 @@ Trust policy, so the admin account can assume it (123456789012 is the admin acco
 
 The admin side also needs `organizations:ListAccounts` and `sts:AssumeRole`.
 
-## Limits
+## Known limitations
 
 - CreateTime is not detach time, so a volume detached yesterday can look old.
 - Snapshots and AMI dependencies are not checked.
 - Cost is an estimate from one flat price.
 - Only accounts reachable through the role are scanned.
 
-## Tests
+## Validation
 
 ```
 pip install -r requirements.txt
